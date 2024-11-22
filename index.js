@@ -1,11 +1,15 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mysql = require('mysql2');
+const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const port = 3000;
 
 app.use(bodyParser.json());
+
+app.use(express.static(path.join(__dirname, "static")));
 
 const db = mysql.createConnection({
     host: 'localhost',
@@ -20,6 +24,16 @@ db.connect(err => {
         process.exit(1);
     }
     console.log('Connesso al database MySQL.');
+});
+
+app.get('/', (req, res) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(200);
+
+    const filepath = path.join(__dirname, "Static", "Home.html");
+    res.write(fs.readFileSync(filepath, "utf-8"));
+
+    res.end();
 });
 
 app.get('/books', (req, res) => {
