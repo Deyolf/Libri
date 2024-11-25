@@ -1,15 +1,10 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mysql = require('mysql2');
-const path = require('path');
-const fs = require('fs');
-
 const app = express();
 const port = 3000;
 
 app.use(bodyParser.json());
-
-app.use(express.static(path.join(__dirname, "static")));
 
 const db = mysql.createConnection({
     host: 'localhost',
@@ -26,57 +21,92 @@ db.connect(err => {
     console.log('Connesso al database MySQL.');
 });
 
-app.get('/', (req, res) => {
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.status(200);
+app.post('/books', async (req, res) => {
+    const { title, authors, genres, position } = req.body;
 
-    const filepath = path.join(__dirname, "Static", "Home.html");
-    res.write(fs.readFileSync(filepath, "utf-8"));
+    db.beginTransaction(err => {
+        if (err) return res.status(500).send(err);
 
-    res.end();
+        const insertBook = `INSERT INTO books (title, position_id) VALUES (?, ?)`;
+        db.query(insertBook, [title, position], (err, bookResult) => {
+            if (err) {
+                db.rollback();
+                return res.status(500).send(err);
+            }
+
+            const bookId = bookResult.insertId;
+
+            const authorPromises = authors.map(authorId =>
+                new Promise((resolve, reject) => {
+                    const query = `INSERT INTO book_authors (book_id, author_id) VALUES (?, ?)`;
+                    db.query(query, [bookId, authorId], err => (err ? reject(err) : resolve()));
+                })
+            );
+
+            const genrePromises = genres.map(genreId =>
+                new Promise((resolve, reject) => {
+                    const query = `INSERT INTO book_genres (book_id, genre_id) VALUES (?, ?)`;
+                    db.query(query, [bookId, genreId], err => (err ? reject(err) : resolve()));
+                })
+            );
+
+            Promise.all([...authorPromises, ...genrePromises])
+                .then(() => {
+                    db.commit();
+                    res.status(201).json({ id: bookId, title });
+                })
+                .catch(err => {
+                    db.rollback();
+                    res.status(500).send(err);
+                });
+        });
+    });
 });
 
 app.get('/books', (req, res) => {
-    const sql = 'SELECT * FROM books';
-    db.query(sql, (err, results) => {
+    const { title, author, genre, position } = req.query;
+    let sql = `
+        SELECT b.id, b.title, p.name AS position,
+            GROUP_CONCAT(DISTINCT CONCAT(a.first_name, ' ', a.last_name)) AS authors,
+            GROUP_CONCAT(DISTINCT g.name) AS genres
+        FROM books b
+        LEFT JOIN positions p ON b.position_id = p.id
+        LEFT JOIN book_authors ba ON b.id = ba.book_id
+        LEFT JOIN authors a ON ba.author_id = a.id
+        LEFT JOIN book_genres bg ON b.id = bg.book_id
+        LEFT JOIN genres g ON bg.genre_id = g.id
+        WHERE 1=1
+    `;
+
+    const params = [];
+    if (title) {
+        sql += ` AND b.title LIKE ?`;
+        params.push(`%${title}%`);
+    }
+    if (author) {
+        sql += ` AND CONCAT(a.first_name, ' ', a.last_name) LIKE ?`;
+        params.push(`%${author}%`);
+    }
+    if (genre) {
+        sql += ` AND g.name = ?`;
+        params.push(genre);
+    }
+    if (position) {
+        sql += ` AND p.name = ?`;
+        params.push(position);
+    }
+
+    sql += ` GROUP BY b.id`;
+
+    db.query(sql, params, (err, results) => {
         if (err) return res.status(500).send(err);
         res.json(results);
     });
 });
 
-app.get('/books/:id', (req, res) => {
-    const { id } = req.params;
-    const sql = 'SELECT * FROM books WHERE id = ?';
-    db.query(sql, [id], (err, results) => {
-        if (err) return res.status(500).send(err);
-        if (results.length === 0) return res.status(404).send('Libro non trovato');
-        res.json(results[0]);
-    });
-});
-
-app.post('/books', (req, res) => {
-    const { title, author, year, genre } = req.body;
-    const sql = 'INSERT INTO books (title, author, year, genre) VALUES (?, ?, ?, ?)';
-    db.query(sql, [title, author, year, genre], (err, result) => {
-        if (err) return res.status(500).send(err);
-        res.status(201).json({ id: result.insertId, title, author, year, genre });
-    });
-});
-
-app.put('/books/:id', (req, res) => {
-    const { id } = req.params;
-    const { title, author, year, genre } = req.body;
-    const sql = 'UPDATE books SET title = ?, author = ?, year = ?, genre = ? WHERE id = ?';
-    db.query(sql, [title, author, year, genre, id], (err, result) => {
-        if (err) return res.status(500).send(err);
-        if (result.affectedRows === 0) return res.status(404).send('Libro non trovato');
-        res.json({ id, title, author, year, genre });
-    });
-});
-
 app.delete('/books/:id', (req, res) => {
     const { id } = req.params;
-    const sql = 'DELETE FROM books WHERE id = ?';
+    const sql = `DELETE FROM books WHERE id = ?`;
     db.query(sql, [id], (err, result) => {
         if (err) return res.status(500).send(err);
         if (result.affectedRows === 0) return res.status(404).send('Libro non trovato');
