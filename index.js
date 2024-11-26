@@ -1,7 +1,12 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const mysql = require('mysql2');
+const fs = require('fs')
+const path = require('path')
+
 const app = express();
+app.use(express.static(path.join(__dirname, "static")));
+app.use(express.static(path.join(__dirname, "static/Sottopagine")));
 const port = 3000;
 
 app.use(bodyParser.json());
@@ -19,6 +24,26 @@ db.connect(err => {
         process.exit(1);
     }
     console.log('Connesso al database MySQL.');
+});
+
+app.get("/", function (req, res) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(200);
+
+    const filepath = path.join(__dirname, "static", "Homepage.html");
+    res.write(fs.readFileSync(filepath, "utf-8"));
+
+    res.end();
+});
+
+app.get("/manage", function (req, res) {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.status(200);
+
+    const filepath = path.join(__dirname, "static","Sottopagine", "manage.html");
+    res.write(fs.readFileSync(filepath, "utf-8"));
+
+    res.end();
 });
 
 app.post('/books', async (req, res) => {
@@ -110,6 +135,87 @@ app.delete('/books/:id', (req, res) => {
     db.query(sql, [id], (err, result) => {
         if (err) return res.status(500).send(err);
         if (result.affectedRows === 0) return res.status(404).send('Libro non trovato');
+        res.status(204).send();
+    });
+});
+
+app.post('/authors', (req, res) => {
+    const { first_name, last_name } = req.body;
+    const sql = `INSERT INTO authors (first_name, last_name) VALUES (?, ?)`;
+    db.query(sql, [first_name, last_name], (err, result) => {
+        if (err) return res.status(500).send(err);
+        res.status(201).json({ id: result.insertId, first_name, last_name });
+    });
+});
+
+app.get('/authors', (req, res) => {
+    const sql = `SELECT * FROM authors`;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).send(err);
+        res.json(results);
+    });
+});
+
+app.delete('/authors/:id', (req, res) => {
+    const { id } = req.params;
+    const sql = `DELETE FROM authors WHERE id = ?`;
+    db.query(sql, [id], (err, result) => {
+        if (err) return res.status(500).send(err);
+        if (result.affectedRows === 0) return res.status(404).send('Autore non trovato');
+        res.status(204).send();
+    });
+});
+
+app.post('/genres', (req, res) => {
+    const { name } = req.body;
+    const sql = `INSERT INTO genres (name) VALUES (?)`;
+    db.query(sql, [name], (err, result) => {
+        if (err) return res.status(500).send(err);
+        res.status(201).json({ id: result.insertId, name });
+    });
+});
+
+app.get('/genres', (req, res) => {
+    const sql = `SELECT * FROM genres`;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).send(err);
+        res.json(results);
+    });
+});
+
+app.delete('/genres/:id', (req, res) => {
+    const { id } = req.params;
+    const sql = `DELETE FROM genres WHERE id = ?`;
+    db.query(sql, [id], (err, result) => {
+        if (err) return res.status(500).send(err);
+        if (result.affectedRows === 0) return res.status(404).send('Genere non trovato');
+        res.status(204).send();
+    });
+});
+
+app.post('/positions', (req, res) => {
+    const { name } = req.body;
+    const sql = `INSERT INTO positions (name) VALUES (?)`;
+    db.query(sql, [name], (err, result) => {
+        if (err) return res.status(500).send(err);
+        res.status(201).json({ id: result.insertId, name });
+    });
+});
+
+app.get('/positions', (req, res) => {
+    const sql = `SELECT * FROM positions`;
+    db.query(sql, (err, results) => {
+        if (err) return res.status(500).send(err);
+        res.json(results);
+    });
+});
+
+app.delete('/positions/:id', (req, res) => {
+    const { id } = req.params;
+    const sql = `DELETE FROM positions WHERE id = ?`;
+    db.query(sql, [id], (err, result) => {
+        if (err) return res.status(500).send(err);
+        if (result.affectedRows === 0) return res.status(404).send('Posizione non trovata');
         res.status(204).send();
     });
 });

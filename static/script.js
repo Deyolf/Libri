@@ -1,81 +1,85 @@
-const API_URL = 'http://localhost:3000/books';
+document.addEventListener('DOMContentLoaded', () => {
+    const booksTableBody = document.getElementById('booksTableBody');
+    const searchTitleInput = document.getElementById('searchTitle');
+    const searchAuthorInput = document.getElementById('searchAuthor');
+    const filterGenreSelect = document.getElementById('filterGenre');
+    const filterPositionSelect = document.getElementById('filterPosition');
 
-document.addEventListener('DOMContentLoaded', fetchBooks);
+    async function fetchBooks() {
+        const response = await fetch('/books');
+        const books = await response.json();
+        displayBooks(books);
+    }
 
-const bookForm = document.getElementById('bookForm');
-bookForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const book = {
-        title: document.getElementById('title').value,
-        author: document.getElementById('author').value,
-        year: document.getElementById('year').value,
-        genre: document.getElementById('genre').value
-    };
-    await addBook(book);
-    bookForm.reset();
-    fetchBooks();
-});
-
-async function fetchBooks() {
-    const response = await fetch(API_URL);
-    const books = await response.json();
-    const tableBody = document.getElementById('booksTableBody');
-    tableBody.innerHTML = '';
-    books.forEach(book => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-                    <td>${book.id}</td>
-                    <td>${book.title}</td>
-                    <td>${book.author}</td>
-                    <td>${book.year}</td>
-                    <td>${book.genre}</td>
-                    <td class="actions">
-                        <button onclick="deleteBook(${book.id})">Delete</button>
-                        <button onclick="editBook(${book.id}, '${book.title}', '${book.author}', ${book.year}, '${book.genre}')">Edit</button>
-                    </td>
-                `;
-        tableBody.appendChild(row);
-    });
-}
-
-async function addBook(book) {
-    await fetch(API_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(book)
-    });
-}
-
-async function deleteBook(id) {
-    await fetch(`${API_URL}/${id}`, { method: 'DELETE' });
-    fetchBooks();
-}
-
-function editBook(id, title, author, year, genre) {
-    document.getElementById('title').value = title;
-    document.getElementById('author').value = author;
-    document.getElementById('year').value = year;
-    document.getElementById('genre').value = genre;
-
-    bookForm.onsubmit = async (e) => {
-        e.preventDefault();
-        const updatedBook = {
-            title: document.getElementById('title').value,
-            author: document.getElementById('author').value,
-            year: document.getElementById('year').value,
-            genre: document.getElementById('genre').value
-        };
-        await fetch(`${API_URL}/${id}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(updatedBook)
+    function displayBooks(books) {
+        booksTableBody.innerHTML = '';
+        books.forEach(book => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${book.id}</td>
+                <td>${book.title}</td>
+                <td>${book.authors.map(author => `${author.first_name} ${author.last_name}`).join(', ')}</td>
+                <td>${book.genres.map(genre => genre.name).join(', ')}</td>
+                <td>${book.position.name}</td>
+            `;
+            booksTableBody.appendChild(row);
         });
-        bookForm.reset();
-        bookForm.onsubmit = async (e) => {
-            e.preventDefault();
-            await addBook(updatedBook);
-            fetchBooks();
-        };
-        fetchBooks();
-    };
-}
+    }
+
+    async function fetchGenres() {
+        const response = await fetch('/genres');
+        const genres = await response.json();
+        filterGenreSelect.innerHTML = '<option value="">Filter by Genre</option>';
+        genres.forEach(genre => {
+            const option = document.createElement('option');
+            option.value = genre.id;
+            option.textContent = genre.name;
+            filterGenreSelect.appendChild(option);
+        });
+    }
+
+    async function fetchPositions() {
+        const response = await fetch('/positions');
+        const positions = await response.json();
+        filterPositionSelect.innerHTML = '<option value="">Filter by Position</option>';
+        positions.forEach(position => {
+            const option = document.createElement('option');
+            option.value = position.id;
+            option.textContent = position.name;
+            filterPositionSelect.appendChild(option);
+        });
+    }
+
+    async function filterBooks() {
+        const title = searchTitleInput.value.toLowerCase();
+        const author = searchAuthorInput.value.toLowerCase();
+        const genre = filterGenreSelect.value;
+        const position = filterPositionSelect.value;
+
+        const response = await fetch('/books');
+        const books = await response.json();
+
+        const filteredBooks = books.filter(book => {
+            const matchesTitle = book.title.toLowerCase().includes(title);
+            const matchesAuthor = book.authors.some(authorObj =>
+                `${authorObj.first_name} ${authorObj.last_name}`.toLowerCase().includes(author)
+            );
+            const matchesGenre = genre ? book.genres.some(genreObj => genreObj.id == genre) : true;
+            const matchesPosition = position ? book.position.id == position : true;
+
+            return matchesTitle && matchesAuthor && matchesGenre && matchesPosition;
+        });
+
+        displayBooks(filteredBooks);
+    }
+
+    searchTitleInput.addEventListener('input', filterBooks);
+    searchAuthorInput.addEventListener('input', filterBooks);
+
+    filterGenreSelect.addEventListener('change', filterBooks);
+    filterPositionSelect.addEventListener('change', filterBooks);
+
+    fetchBooks();
+    fetchGenres();
+    fetchPositions();
+});
