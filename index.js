@@ -4,20 +4,30 @@ const mysql = require('mysql2');
 const fs = require('fs')
 const path = require('path')
 
-const app = express();
-app.use(express.static(path.join(__dirname, "static")));
-app.use(express.static(path.join(__dirname, "static/Sottopagine")));
-const port = 3000;
+//variabili globali
+const app = express();//app x utilizzo modulo express
+const hostname = 'localhost';
+const port = 3000;//porta per determinare la porta di ascolto del server api
+const hostSQL = 'localhost';//definizione hostname per SQL
+const userSQL = 'root';//definizione user per sql
+const databaseSQL = 'library';//definizione database per SQL
+const passwordSQL = '';//definizione password per SQL
 
-app.use(bodyParser.json());
+//inizializzazione path statici per utilizzo cartelle come siti in locale con path relativi
+app.use(express.static(path.join(__dirname, "static")));//inizializzazione cartella static per gestione Homepage
+app.use(express.static(path.join(__dirname, "static/Sottopagine")));//inizializzazione cartella sottopagine per gestione manage
 
+app.use(bodyParser.json());//inizializzazione bodyparserer
+
+//parametri connessione mysql
 const db = mysql.createConnection({
-    host: 'localhost',
-    user: 'root',
-    password: '',
-    database: 'library'
+    host: hostSQL,
+    user: userSQL,
+    password: passwordSQL,
+    database: databaseSQL
 });
 
+//connessione SQL
 db.connect(err => {
     if (err) {
         console.error('Errore di connessione al database:', err);
@@ -26,27 +36,29 @@ db.connect(err => {
     console.log('Connesso al database MySQL.');
 });
 
-app.get("/", function (req, res) {
+//caricamento homepage
+function loadHomepage(req,res){
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200);
-
+    
     const filepath = path.join(__dirname, "static", "Homepage.html");
     res.write(fs.readFileSync(filepath, "utf-8"));
 
     res.end();
-});
+}
 
-app.get("/manage", function (req, res) {
+//caricamento manage
+function loadManage(req,res){
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.status(200);
 
-    const filepath = path.join(__dirname, "static","Sottopagine", "manage.html");
+    const filepath = path.join(__dirname, "static", "Sottopagine", "manage.html");
     res.write(fs.readFileSync(filepath, "utf-8"));
 
     res.end();
-});
+}
 
-app.post('/books', async (req, res) => {
+async function addBook(req,res){
     const { title, authors, genres, position } = req.body;
 
     db.beginTransaction(err => {
@@ -86,7 +98,14 @@ app.post('/books', async (req, res) => {
                 });
         });
     });
-});
+}
+
+//definizione routes
+app.get("/", (req,res) => loadHomepage(req, res));
+app.get("/manage", (req, res) => loadManage(req,res));
+app.post('/books', async (req, res) => addBook(req,res));
+
+
 
 app.get('/books', (req, res) => {
     const { title, author, genre, position } = req.query;
@@ -220,6 +239,6 @@ app.delete('/positions/:id', (req, res) => {
     });
 });
 
-app.listen(port, () => {
-    console.log(`Server in esecuzione su http://localhost:${port}`);
+app.listen(port, hostname, () => {
+    console.log(`Server in esecuzione su http://${hostname}:${port}`);
 });
